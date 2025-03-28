@@ -1,124 +1,103 @@
 import "./Login.css";
 import "bootstrap/dist/css/bootstrap.css";
-import { useContext } from "react";
-import { UserInfoContext } from "../../userInfo/UserInfoProvider";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import AuthenticationFormLayout from "../AuthenticationFormLayout";
-import { AuthToken, FakeData, User } from "tweeter-shared";
 import useToastListener from "../../toaster/ToastListenerHook";
+import AuthenticationFields from "../AuthenticationFields";
+import { LoginPresenter } from "../../../presenters/LoginPresenter";
+import useUserInfoHook from "../../userInfo/userInfoHook";
+import { View } from "../../../presenters/Presenter";
 
 interface Props {
-  originalUrl?: string;
+    originalUrl?: string;
+    presenter?: LoginPresenter;
 }
 
 const Login = (props: Props) => {
-  const [alias, setAlias] = useState("");
-  const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+    const [alias, setAlias] = useState("");
+    const [password, setPassword] = useState("");
+    const [rememberMe, setRememberMe] = useState(false); // staying in view because doLogin stays
 
-  const navigate = useNavigate();
-  const { updateUserInfo } = useContext(UserInfoContext);
-  const { displayErrorMessage } = useToastListener();
+    const { displayErrorMessage } = useToastListener();
 
-  const checkSubmitButtonStatus = (): boolean => {
-    return !alias || !password;
-  };
+    const listener: View = {
+        displayErrorMessage: displayErrorMessage
+    };
 
-  const loginOnEnter = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (event.key == "Enter" && !checkSubmitButtonStatus()) {
-      doLogin();
-    }
-  };
+    const [presenter] = useState(props.presenter ?? new LoginPresenter(listener));
 
-  const doLogin = async () => {
-    try {
-      setIsLoading(true);
+    const { updateUserInfo } = useUserInfoHook();
+    const navigate = useNavigate();
 
-      const [user, authToken] = await login(alias, password);
+    const checkSubmitButtonStatus = (): boolean => {
+        return !alias || !password;
+    };
 
-      updateUserInfo(user, user, authToken, rememberMe);
+    const loginOnEnter = (event: React.KeyboardEvent<HTMLElement>) => {
+        if (event.key == "Enter" && !checkSubmitButtonStatus()) {
+            presenter.alias = alias;
+            presenter.password = password;
+            if (props.originalUrl) {
+                presenter.originalURL = props.originalUrl;
+            }
+            doLogin();
+        }
+    };
 
-      if (!!props.originalUrl) {
-        navigate(props.originalUrl);
-      } else {
-        navigate("/");
-      }
-    } catch (error) {
-      displayErrorMessage(
-        `Failed to log user in because of exception: ${error}`
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const inputFieldGenerator = () => {
+        return (
+            <AuthenticationFields
+                onEnter={loginOnEnter}
+                setAlias={setAlias}
+                setPassword={setPassword}
+            />
+        );
+    };
 
-  const login = async (
-    alias: string,
-    password: string
-  ): Promise<[User, AuthToken]> => {
-    // TODO: Replace with the result of calling the server
-    const user = FakeData.instance.firstUser;
+    const switchAuthenticationMethodGenerator = () => {
+        return (
+            <div className="mb-3">
+                Not registered? <Link to="/register">Register</Link>
+            </div>
+        );
+    };
 
-    if (user === null) {
-      throw new Error("Invalid alias or password");
-    }
+    const doLogin = async () => {
+        // included in view layer bc hook is UI
+        try {
+            presenter.isLoading = true;
+            const [user, authToken] = await presenter.login(alias, password);
+            updateUserInfo(user, user, authToken, rememberMe);
+            if (!!props.originalUrl) {
+                navigate(props.originalUrl);
+            } else {
+                navigate("/");
+            }
+        } catch (error) {
+            displayErrorMessage(
+                `Failed to log user in because of exception: ${error}`
+            );
+        } finally {
+            presenter.isLoading = false;
+        }
+    };
 
-    return [user, FakeData.instance.authToken];
-  };
-
-  const inputFieldGenerator = () => {
     return (
-      <>
-        <div className="form-floating">
-          <input
-            type="text"
-            className="form-control"
-            size={50}
-            id="aliasInput"
-            placeholder="name@example.com"
-            onKeyDown={loginOnEnter}
-            onChange={(event) => setAlias(event.target.value)}
-          />
-          <label htmlFor="aliasInput">Alias</label>
-        </div>
-        <div className="form-floating mb-3">
-          <input
-            type="password"
-            className="form-control bottom"
-            id="passwordInput"
-            placeholder="Password"
-            onKeyDown={loginOnEnter}
-            onChange={(event) => setPassword(event.target.value)}
-          />
-          <label htmlFor="passwordInput">Password</label>
-        </div>
-      </>
+        <AuthenticationFormLayout
+            headingText="Please Sign In"
+            submitButtonLabel="Sign in"
+            oAuthHeading="Sign in with:"
+            inputFieldGenerator={inputFieldGenerator}
+            switchAuthenticationMethodGenerator={
+                switchAuthenticationMethodGenerator
+            }
+            setRememberMe={setRememberMe}
+            submitButtonDisabled={checkSubmitButtonStatus}
+            isLoading={presenter.isLoading}
+            submit={doLogin}
+        />
     );
-  };
-
-  const switchAuthenticationMethodGenerator = () => {
-    return (
-      <div className="mb-3">
-        Not registered? <Link to="/register">Register</Link>
-      </div>
-    );
-  };
-
-  return (
-    <AuthenticationFormLayout
-      headingText="Please Sign In"
-      submitButtonLabel="Sign in"
-      oAuthHeading="Sign in with:"
-      inputFieldGenerator={inputFieldGenerator}
-      switchAuthenticationMethodGenerator={switchAuthenticationMethodGenerator}
-      setRememberMe={setRememberMe}
-      submitButtonDisabled={checkSubmitButtonStatus}
-      isLoading={isLoading}
-      submit={doLogin}
-    />
-  );
 };
 
 export default Login;
