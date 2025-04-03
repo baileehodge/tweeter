@@ -10,5 +10,9 @@
   "dependencies": {
     "rimraf": "^5.0.5",
     "vite-plugin-dts": "^3.7.3"
+  },
+  "devDependencies": {
+    "ts-jest": "^29.3.1",
+    "typescript": "^5.8.2"
   }
 }
